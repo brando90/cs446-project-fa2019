@@ -48,7 +48,8 @@ def evalaute_running_mdl_data_set(loss, error, net, dataloader, device, iteratio
         for i,(inputs,targets) in enumerate(dataloader):
             if i >= iterations:
                 break
-            inputs,targets = inputs.to(device), targets.to(device)
+            if type(inputs) is torch.Tensor:
+                inputs,targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             running_loss += loss(outputs,targets).item()
             running_error += error(outputs,targets).item()
@@ -78,7 +79,8 @@ def evalaute_mdl_on_full_data_set(loss, error, net, dataloader, device, iteratio
                 avg_loss = (N/batch_size)*avg_loss
                 avg_error = (N/batch_size)*avg_loss
                 return avg_loss/n_total,avg_error/n_total
-            inputs,targets = inputs.to(device), targets.to(device)
+            if type(inputs) is torch.Tensor:
+                inputs,targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             avg_loss += (batch_size/N)*loss(outputs,targets).item()
             avg_error += (batch_size/N)*error(outputs,targets).item()
@@ -108,15 +110,12 @@ class Trainer:
     def train_and_track_stats(self, net, nb_epochs, iterations=4, train_iterations=inf, target_train_loss=inf, precision=0.01, reset_stats_collector=True):
         '''
         Train net with nb_epochs and 1 epoch only # iterations = iterations
-
         Note, the stats collector is restarted to empty every time this function is called.
         Note the return value is just meant for printing, debugging purposes or saving to yaml files.
         :param torch.model net: pytorch model to be trained.
         :param int nb_epochs: number of epochs to train a data set (epoch=whole data set once)
-
         :param int iterations: number of batches it uses to evaluate how the model is doing (and storing the value according to this) (1 iteration = 1 evaluation on 1 batch. iteration = nb_epochs means we see whole data set)
         :param int train_iterations: number of batches it uses to train the model per epoch (1 iteration = 1 evaluation on 1 batch. iteration = ceil(N_train/batch_size) means we see whole data set per epoch) set this low to train really quickly.
-
         :param int target_train_loss: the target loss to halt the model when (approximately) reached according to precision param
         :param float precision: the precision/closeness our model's loss should be to the target loss
         :param boolean reset_stats_collector: weather to resart the stats collector (stats collector collets errors stats etc during training)
@@ -134,7 +133,6 @@ class Trainer:
         val_loss_epoch, val_error_epoch = self.evalaute_mdl_data_set(self.criterion, self.error_criterion, net, self.valloader, self.device, iterations)
         test_loss_epoch, test_error_epoch = self.evalaute_mdl_data_set(self.criterion, self.error_criterion, net, self.testloader, self.device, iterations)
         self.stats_collector.append_losses_errors_accs(train_loss_epoch, train_error_epoch, val_loss_epoch, val_error_epoch, test_loss_epoch, test_error_epoch)
-
         print(f'(train_loss: {train_loss_epoch}, train error: {train_error_epoch}) , (test loss: {test_loss_epoch}, test error: {test_error_epoch})')
         ''' Start training '''
         print('about to start training')
@@ -150,7 +148,8 @@ class Trainer:
                 ''' zero the parameter gradients '''
                 self.optimizer.zero_grad()
                 ''' train step = forward + backward + optimize '''
-                inputs,targets = inputs.to(self.device),targets.to(self.device)
+                if type(inputs) is torch.Tensor:
+                    inputs,targets = inputs.to(self.device),targets.to(self.device)
                 outputs = net(inputs)
                 loss = self.criterion(outputs,targets)
                 loss.backward()

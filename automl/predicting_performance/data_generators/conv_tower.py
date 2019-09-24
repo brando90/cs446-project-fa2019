@@ -36,12 +36,11 @@ from pdb import set_trace as st
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 class Gene_data(nn.Module):
-    def __init__(self, para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_layers=5, max_num_layers=20, max_para_times = 50, default_init_w_algor = True):
+    def __init__(self, para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_brick = 3, max_num_brick=6,max_para_times = 50, default_init_w_algor = True):
         super().__init__()
         '''
-        This class is to generate a almost total random model.
+        This class is to generate tower_style_architecture models.
         self.min_filter: minimum number of filter size for convolution layers
         self.min_fc: minimum number of filter size for fully-connected layer
         self.max_filte: maximum number of filter size for convolution layers
@@ -57,20 +56,23 @@ class Gene_data(nn.Module):
         self.para_min: minimum number of parameters. Set a limit of the number of parameter in the range of (para_min, para_max).
         self.para_max : maximum number of parameter
         self.max_para_times: self.para_max = self.max_para_times * self.para_min
-        self.min_num_layers: minimum number of layers before make10layer
-        self.max_num_layers: maximum number of layers before make10layer
+        self.min_num_brick: minimum number of brick structure
+        self.max_num_brick:maximum number of brick structure
+        self.num_brick: number of brick structure
         self.draft_order: a list that has the important architect of the model.
         self.architecture_order: a list has the specific details of the architect of the model:
                             such as 1d or 2d, which make10layer to use, where to put the flatten layer
         self.first_linear: if True, there is no linear layer yet, the conv, batchnorm and pool layer still use 2d forma;
                             if False, put a faltten layer before the first linear layer and use 1d format after that.
-        self.randomchoice_all: choices of all kinds of layers
-        self.radomchoice_no_act: choices of layers except activity layers
+        self.randomchoice_LT： choice of linear layers:'conv', 'linear'
+        self.radomchoice_Tower: choicce of tower layers: 'maxpool', 'batch','dropout'
         self.randomchoice_act: choices of activity layer
         self.randomchoice_keepsize: layers to be put after make10layer,which would not change the out_channel ==10.
         self.init_choice: choices of init_weight_algorithm.
         self.init_algorithm_list: a list to store the algorithm of init_weight_algorithm.
         self.init_hyerparam_list: a list to store the parameter of init_weight_algorithm.
+        self.default_init_w_algor: if True, will choose the default init_weight_algorithm only.
+                                    if False, will choose the random init_weight_algorithm from self.init_choice.
         '''
         self.min_filter = min_filter
         self.min_fc = min_fc
@@ -84,13 +86,18 @@ class Gene_data(nn.Module):
         self.para_min = para_min
         self.para_max = para_min * max_para_times
         self.max_para_times = max_para_times
-        self.min_num_layers = min_num_layers
-        self.max_num_layers = max_num_layers
+        self.min_filter = min_filter
+        self.min_fc = min_fc
+        self.max_filter = max_filter
+        self.max_fc = max_fc
+        self.min_num_brick = min_num_brick
+        self.max_num_brick = min_num_brick
+        self.num_brick = random.randint(min_num_brick,min_num_brick)
         self.draft_order = []
-        self.architecture_order = []
         self.first_linear = True
-        self.randomchoice_all =['conv', 'linear', 'maxpool', 'batch','relu','selu','tanh','leaky_relu','softmax','dropout']
-        self.radomchoice_no_act = ['conv', 'linear', 'maxpool', 'batch', 'softmax','dropout']
+        self.architecture_order = []
+        self.randomchoice_LT =['conv', 'linear']
+        self.radomchoice_Tower = ['maxpool', 'batch','dropout']
         self.randomchoice_act = ['relu','selu','tanh','leaky_relu']
         self.randomchoice_keepsize = ['softmax','dropout','batch', 'activity']
         self.init_choice = ['default','xavier_uniform','xavier_normal','He_uniform','He_normal']
@@ -98,31 +105,37 @@ class Gene_data(nn.Module):
         self.init_hyerparam_list = []
         self.default_init_w_algor = default_init_w_algor
 
+    def create_brick(self):
+        '''
+        Create Special Random Block * LT,A,T1,
+        '''
+        brick = []
+        brick.append(random.choice(self.randomchoice_LT))
+        brick.append(random.choice(self.randomchoice_act))
+        brick.append(random.choice(self.radomchoice_Tower))
+        return brick
+
     def create_draft_order(self):
         '''
-        Create a list draft_order:
-        1.randomly choose the layers from self.randomchoice_all
-        2.make sure no two of the same activity layers in a row.
-        3.append a make10layer to ensure the out_channel is 10.
-        4.randomly append 0 to 3 layers form self.randomchoice_keepsize which keep the number of self.out_channels.
-
+        Have a draft of our structure.
+        Add a batchnorm layer at the beginning with 50% possibility.
+        Add the repition of brick structure.
+        Add make10layer and randomly 0 to 2 layers from randomchoice_keepsize.
         '''
-        #gets a random number for the number of layers
-        num_layers = random.randint(self.min_num_layers,self.max_num_layers)
-        print(f"num layers: {num_layers}")
-
+        # add a batchnorm with 50% posibility.
+        ifbatch = random.choice([True,False])
+        if ifbatch:
+            self.draft_order.append('batch')
+        i = self.num_brick
+        #make sure the first brick is a conv brick (not fullyconnected brick)
         self.draft_order.append('conv')
-
-        i = 0
-        while i <= num_layers:
-            self.draft_order.append(random.choice(self.randomchoice_all))
-            i = i + 1
-
-        #fix the situation where have two consecutive activity layers
-        for i in range(len(self.draft_order) - 1):
-            if self.draft_order[i] in self.randomchoice_act and self.draft_order[i + 1] == self.draft_order[i]:
-                self.draft_order[i + 1] = random.choice(self.radomchoice_no_act)
-
+        self.draft_order.append(random.choice(self.randomchoice_act))
+        self.draft_order.append(random.choice(self.radomchoice_Tower))
+        #add the brick structure
+        while i > 0:
+            self.draft_order = self.draft_order + self.create_brick()
+            i -= 1
+        #add make10layer and random layers after that.
         self.draft_order.append('make10layer')
         nb_layers_add = random.choice([0,1,2])
         i = 0
@@ -133,7 +146,6 @@ class Gene_data(nn.Module):
             else:
                 self.draft_order.append(toappend)
             i = i + 1
-        print(self.draft_order)
 
     def create_architecture_order(self):
         '''
@@ -182,8 +194,7 @@ class Gene_data(nn.Module):
                     self.architecture_order.append('dropout1d')
             if block == 'make10layer':
                 self.architecture_order.append('make10layer')
-
-        # print(self.architecture_order)
+        print(self.architecture_order)
 
     def apply_init_algor(self,layer):
         '''
@@ -338,12 +349,13 @@ def count_nb_params(net):
         count += p.data.nelement()
     return count
 
-def local_test_train(i, data_path):
+def local_test_train(i,data_path):
     '''
     Generates a debugging dataset to cifar10
     This is for use in local CPU to test if the code is working or not.
     Try-catch structure can be applied.
     '''
+    ##
     success_nb = 0
     while success_nb < 1:
         try:
@@ -357,7 +369,7 @@ def local_test_train(i, data_path):
                 print(init_algorithm_list)
                 print(init_hyerparam_list)
                 print(number_parameters)
-
+            ##
             trainloader, valloader, testloader = get_cifar10_for_data_point_mdl_gen()
             print(mdl)
             ##
@@ -401,8 +413,8 @@ def main(i,gene,data_path,epochs,mdl_name):
     The main train fucntion to be used on GPU.
     Have a try-catch structure.
     i: each call will run i times and save i data points.
-    gene: an object of Gene_data. Can change the default parameters in this fucntion, such as
-     (number para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_layers=5, max_num_layers=20)
+    gene: an object of Gene_data. Can change the default parameters in this fucntion. The default value are:
+     (para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_brick = 3, max_num_brick=6,max_para_times = 50, default_init_w_algor = True)
      data
     data_path: the root of where to save the results of training.
     epochs: number of epochs to train.
@@ -412,7 +424,7 @@ def main(i,gene,data_path,epochs,mdl_name):
     success_nb = 0
     while success_nb < 1:
         try:
-            # gene =Gene_data()
+            gene =Gene_data()
             number_parameters = 0
             while number_parameters < gene.para_min or number_parameters > gene.para_max:
                 gene.create_draft_order()
@@ -420,7 +432,6 @@ def main(i,gene,data_path,epochs,mdl_name):
                 mdl, init_algorithm_list,init_hyerparam_list= gene.create_mdl()
                 number_parameters = count_nb_params(mdl)
                 print(number_parameters)
-
             trainloader, valloader, testloader = get_cifar10_for_data_point_mdl_gen()
             ## create directory to save models
             make_and_check_dir(data_path)
@@ -459,30 +470,30 @@ def main(i,gene,data_path,epochs,mdl_name):
             print('FAIL')
             print(e)
 
-
 if __name__ == '__main__':
     '''
     change those parameter before train:
     i: each call will run i times and save i data points.
-    gene: an object of Gene_data. Can change the default parameters in this fucntion, such as
-     (number para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_layers=5, max_num_layers=20)
+    gene: an object of Gene_data. Can change the default parameters in this fucntion.The default value are:
+     (para_min = 40000, min_filter = 26, min_fc = 32, max_filter = 32, max_fc = 256,min_num_brick = 3, max_num_brick=6,max_para_times = 50, default_init_w_algor = True)
      data
     data_path: the root of where to save the results of training.
     epochs: number of epochs to train.
     mdl_name: change the mdl name.
     '''
-    # gene =Gene_data()
-    # data_path = '~/predicting_generalization/automl/data/'
-    # data_path = Path(data_path).expanduser()
-    # for i in range(1000):
-    #     epochs = random.randint(400,600)
-    #     mdl_name = f'conv_random_{i}'
-    #     main(i,gene,data_path,epochs,mdl_name)
-    # print('done \a')
 
-    #if want to test one local one:
-    data_path = '~/predicting_generalization/automl/data/xiao_test_test'
+    gene =Gene_data()
+    data_path = '~/predicting_generalization/automl/data/test/'
     data_path = Path(data_path).expanduser()
-    for i in range(1):
-        local_test_train(i,data_path)
+    for i in range(1000):
+        epochs = random.randint(400,600)
+        mdl_name = f'conv_tower_mdl_{i}'
+        main(i,gene,data_path,epochs,mdl_name)
     print('done \a')
+
+    # #if want to test one local one:
+    # data_path = '~/predicting_generalization/automl/data/xiao_test_test'
+    # data_path = Path(data_path).expanduser()
+    # for i in range(1):
+    #     local_test_train(i,data_path)
+    # print('done \a')

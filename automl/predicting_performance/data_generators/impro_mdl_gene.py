@@ -116,9 +116,9 @@ class Gene_data(nn.Module):
             i = i + 1
 
         #fix the situation where have two consecutive activity layers
-        for i in range(len(self.draft_order) - 1):
-            if self.draft_order[i] in self.randomchoice_act and self.draft_order[i + 1] == self.draft_order[i]:
-                self.draft_order[i + 1] = random.choice(self.radomchoice_no_act)
+        # for i in range(len(self.draft_order) - 1):
+        #     if self.draft_order[i] in self.randomchoice_act and self.draft_order[i + 1] == self.draft_order[i]:
+        #         self.draft_order[i + 1] = random.choice(self.radomchoice_no_act)
 
         self.draft_order.append('make10layer')
         nb_layers_add = random.choice([0,1,2])

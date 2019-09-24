@@ -16,21 +16,13 @@ class Vocab:
 
     def __init__(self):
         ## set architecture vocab data structures
-        architecture_vocab, architecture2idx = self._init_architecture_vocab()
-        self.architecture_vocab = architecture_vocab
-        self.architecture2idx = architecture2idx
+        self.architecture_vocab, self.architecture2idx = self._init_architecture_vocab()
         ## set hyper param vocab data structures
-        hparms_vocab, hptype2idx = self._init_layers_hp_vocab()
-        self.hparms_vocab = hparms_vocab
-        self.hptype2idx = hptype2idx
+        self.hparms_vocab, self.hptype2idx = self._init_layers_hp_vocab()
         ## Optimizer
-        optimizer_vocab, opt2idx = self._init_optimizer_vocab()
-        self.optimizer_vocab = optimizer_vocab
-        self.opt2idx = opt2idx
+        self.optimizer_vocab, self.opt2idx = self._init_optimizer_vocab()
         ## Optimizer hyperparams
-        hparams_opt_vocab, hpopt2idx = self._init_layers_hp_optimizer_vocab()
-        self.hparams_opt_vocab = hparams_opt_vocab
-        self.hpopt2idx = hpopt2idx
+        self.hparams_opt_vocab, self.hpopt2idx = self._init_layers_hp_optimizer_vocab()
 
     def _init_architecture_vocab(self):
         '''
@@ -355,13 +347,13 @@ class MetaLearningDataset(Dataset):
     __getitem__ to support the indexing such that dataset[i] can be used to get ith sample
     '''
 
-    def __init__(self, data_path):
+    def __init__(self, data_path, vocab):
         '''
         '''
         self.path = Path(data_path).expanduser()
         print(str(data_path))
         self.model_folders = [ f for f in self.path.iterdir() if f.is_dir() ]
-        self.data_processor = DataProcessor()
+        self.data_processor = DataProcessor(vocab)
 
     def __len__(self):
         '''
@@ -396,8 +388,11 @@ class MetaLearningDataset(Dataset):
             yamldata = yaml.load(f, Loader=Loader)
             # get raw data
             data_item['mdl_str'] = yamldata['arch_and_hp']
+            mdl_str = data_item['mdl_str']
             data_item['opt_str'] = yamldata['optimizer']
+            opt_str = data_item['opt_str']
             data_item['epochs'] = yamldata['epochs']
+            epochs = data_item['epochs']
             data_item['batch_size_train'] = yamldata['batch_size_train']
             data_item['batch_size_test'] = yamldata['batch_size_test']
             data_item['batch_size_val'] = yamldata['batch_size_val']
@@ -450,19 +445,34 @@ class MetaLearningDataset(Dataset):
         ##
         return data_item
 
-class Collate_fn_predicting_test_onehot(object):
+class Collate_fn_onehot_general_features(object):
     '''
-    Custom collate function to return everything in per batch ass follow:
+    Custom collate function that gets onehot representation for Arch blocks
+    and gets general features for the rest. General features are such that they
+    are useful for any optimizer amnd initialization. e.g.
+    Optimizer might be anything (even a RNN itself) so having symbolic representation for this
+    even if its in onehot form isn't general (specially if a new unknown optimzer is used that the model has never seen).
+    Thus its better to use the training/validation statistics during training (say the first 10).
+    Similarly for initialization (or final weights). If we use the actual weights
+    then we don't need a symbolic representation for the initialization algorithm.
+    For (space) efficiency reasons we only use statistics of the initial (and final)
+    weights. Mean, Std and L2 of the weights.
+
+    Custom collate function to return everything in per batch as follow:
     - OneHot representation for symbols
-    - placing in a location the value of the hyperparameter
-    - mean, std for W_init and W_final
-    - train error
+    - Arch representation concate of OneHot for Arch and Arch hyperparams [A;A_hp]
+    - Opt representation train history
+    - Net stats representation
     '''
 
-    def __init__(self, device, batch_first, padding_value=-1):
-        self.data_processor = DataProcessor()
+    def __init__(self, device, batch_first, vocab, padding_value=-1):
+        '''
+
+        NOTE: padding_value is -1 so to not get confused with 0 which stands for special characers (TODO: check this implemented correctly)
+        '''
         self.device = device
         self.batch_first = batch_first
+        self.data_processor = DataProcessor(vocab)
         self.padding_value = padding_value
 
     def arch2OneHot(self, indicies):
@@ -513,6 +523,9 @@ class Collate_fn_predicting_test_onehot(object):
         :return torch.Tensor batch_train_errorr: tensor with train errors for each sample in the batch (batch_size)
         '''
         all_batch_info = {}
+        ##
+        batch_mdl_str = [ sample['mdl_str'] for sample in batch ]
+        batch_mdl_str = {'mdl_str':batch_mdl_str}
         ## get arch representation, A
         batch_arch_rep, arch_lengths, arch_mask = self.get_arch_rep(batch)
         arch = {'batch_arch_rep':batch_arch_rep, 'arch_lengths':arch_lengths, 'arch_mask':arch_mask}
@@ -520,21 +533,25 @@ class Collate_fn_predicting_test_onehot(object):
         batch_arch_hp_rep, arch_hp_lengths, arch_hp_mask = self.get_arch_hp_rep(batch)
         arch_hp ={'batch_arch_hp_rep':batch_arch_hp_rep, 'arch_hp_lengths':arch_hp_lengths, 'arch_hp_mask':arch_hp_mask}
         ## get opt representation, O
-        batch_opt = self.get_opt_rep(batch)
-        opt = {'batch_opt':batch_opt}
+        # batch_opt = self.get_opt_rep(batch)
+        # opt = {'batch_opt':batch_opt}
         ## get opt hp, Ohp
-        batch_opt_hp = self.get_opt_hp_rep(batch)
-        opt_hp = {'batch_opt_hp':batch_opt_hp}
+        # batch_opt_hp = self.get_opt_hp_rep(batch)
+        # opt_hp = {'batch_opt_hp':batch_opt_hp}
+        train_history, val_history = self.get_training_validation_history(batch)
+        opt, opt_hp = {'train_history':train_history}, {'val_history':val_history}
         ## get W representation
-        batch_W_init_rep, W_init_lengths, W_init_mask = self.get_mean_std_per_layer(batch, W_type='W_init')
-        batch_W_final_rep, W_final_lengths, W_final_mask = self.get_mean_std_per_layer(batch, W_type='W_final')
-        W_init = {'batch_W_init_rep':batch_W_init_rep, 'W_init_lengths':W_init_lengths, 'W_init_mask':W_init_mask}
-        W_final = {'batch_W_final_rep':batch_W_final_rep, 'W_final_lengths':W_final_lengths, 'W_final_mask':W_final_mask}
+        weight_stats = self.get_all_weight_stats(batch)
         ## get train errors for models
         batch_train_errorr = self.Tensor([ float(sample['train_error']) for sample in batch ])
-        train_error = {'batch_train_errorr':batch_train_errorr}
+        train_error = {'batch_train_error':batch_train_errorr}
+        ##
+        batch_test_errorr = self.Tensor([ float(sample['test_error']) for sample in batch ])
+        #test_error = {'batch_test_error':batch_test_errorr}
+        test_error = batch_test_errorr
         ## collect return batch
-        new_batch = {**arch, **arch_hp, **opt, **opt_hp, **W_init, **W_final, **train_error}
+        new_batch = ({**batch_mdl_str, **arch, **arch_hp, **opt, **opt_hp, **weight_stats, **train_error}, test_error)
+        #print(new_batch['train_history'])
         return new_batch
         #return batch_arch_rep, batch_arch_hp_rep, batch_opt, batch_W_init, batch_W_final, batch_train_errorr
 
@@ -548,16 +565,15 @@ class Collate_fn_predicting_test_onehot(object):
         :return torch.Tensor arch_mask: mask with 0 zeros on padding 1 elsewhere (batch_size, max_len, vocab_size)
         '''
         ## get lengths of sequences for each sample in the batch
-        arch_lengths = self.Tensor([ len(sample['arch']) for sample in batch ]).long()
+        arch_lengths = self.Tensor([ len(sample['arch_indices']) for sample in batch ]).long()
         ## make array of one hot tensors for each example in batch
-        batch = [ self.arch2OneHot(sample['arch']) for sample in batch ]
+        batch = [ self.arch2OneHot(sample['arch_indices']) for sample in batch ]
         ## padd (and concatenate) the tensors in the whole batch
         batch_arch_rep = torch.nn.utils.rnn.pad_sequence(batch, batch_first=self.batch_first, padding_value=self.padding_value)
-        st()
         ## compute mask
-        arch_mask = (batch_arch_rep != self.padding_value).to(self.device)
+        arch_mask = (batch_arch_rep != self.padding_value)
         ##
-        return batch_arch_rep, arch_lengths, arch_mask
+        return batch_arch_rep.to(self.device), arch_lengths.to(self.device), arch_mask.to(self.device)
 
     def get_arch_hp_rep(self, batch):
         '''
@@ -574,9 +590,9 @@ class Collate_fn_predicting_test_onehot(object):
         batch = [ self.Tensor(sample['arch_hp']) for sample in batch ]
         batch_arch_hp_rep = torch.nn.utils.rnn.pad_sequence(batch, batch_first=self.batch_first, padding_value=self.padding_value)
         ## compute mask
-        arch_hp_mask = (batch_arch_hp_rep != self.padding_value).to(self.device)
+        arch_hp_mask = (batch_arch_hp_rep != self.padding_value)
         ##
-        return batch_arch_hp_rep, arch_hp_lengths, arch_hp_mask
+        return batch_arch_hp_rep.to(self.device), arch_hp_lengths.to(self.device), arch_hp_mask.to(self.device)
 
     def get_opt_rep(self, batch):
         '''
@@ -585,9 +601,9 @@ class Collate_fn_predicting_test_onehot(object):
         :param list batch: list of samples in a batch. Samples produced by Dataset, which is a dictionary with all the raw data of a data point model.
         :return torch.Tensor batch_opt: OneHot for which optimizer was used (batch_size, vocab_size)
         '''
-        batch = [ self.opt2OneHot(sample['opt']) for sample in batch ]
+        batch = [ self.opt2OneHot(sample['opt_indices']) for sample in batch ]
         batch_opt = torch.cat(batch,dim=0)
-        return batch_opt
+        return batch_opt.to(self.device)
 
     def get_opt_hp_rep(self, batch):
         '''
@@ -598,9 +614,30 @@ class Collate_fn_predicting_test_onehot(object):
         '''
         batch = [ self.Tensor(sample['opt_hp']) for sample in batch ]
         batch_opt_hp = torch.cat(batch, dim=0)
-        return batch_opt_hp
+        return batch_opt_hp.to(self.device)
 
-    def get_mean_std_per_layer(self, batch, W_type):
+    def get_training_validation_history(self,batch):
+        Tensor = torch.Tensor
+        train_history_batch = []
+        val_history_batch = []
+        for sample in batch:
+            ##
+            train_errors, train_losses = Tensor(sample['train_errors']), Tensor(sample['train_losses'])
+            train = torch.stack((train_errors,train_losses)) # (2,seq_len)
+            #train = train.unsqueeze(2) # so that convolution layers can take it (2,seq_len,1)
+            train_history_batch.append(train)
+            ##
+            val_errors, val_losses = Tensor(sample['val_errors']), Tensor(sample['val_losses'])
+            val = torch.stack((val_errors,val_losses)) # (2,seq_len)
+            #val = val.unsqueeze(2) # so that convolution layers can take it (2,seq_len,1)
+            val_history_batch.append(val)
+        ##
+        train_history_batch = torch.nn.utils.rnn.pad_sequence(train_history_batch, batch_first=self.batch_first, padding_value=self.padding_value)
+        val_history_batch = torch.nn.utils.rnn.pad_sequence(val_history_batch, batch_first=self.batch_first, padding_value=self.padding_value)
+        print(f'val_history_batch = {val_history_batch.size()}')
+        return train_history_batch.to(self.device), val_history_batch.to(self.device)
+
+    def get_all_weight_stats(self, batch):
         '''
 
         :param list batch: list of samples in a batch. Samples produced by Dataset, which is a dictionary with all the raw data of a data point model.
@@ -609,23 +646,55 @@ class Collate_fn_predicting_test_onehot(object):
         :return torch.Tensor W_lengths: lenghts of each sequence in batch (i.e. # layers for each sample in the batch) (batch_size)
         :return torch.Tensor W_mask: mask with 0 zeros on padding 1 elsewhere (batch_size, max_len, vocab_size)
         '''
+        weight_stats = {}
         with torch.no_grad():
             ##
-            W_lengths = self.Tensor([ len(sample[W_type]) for sample in batch ]).long()
-            ## padd
-            new_batch = []
-            for sample in batch:
-                Ws = sample[W_type]
-                Ws = [ self.Tensor(Ws[l]) for l in range(len(Ws)) ]
-                ## compute stats for each layer
-                #stats = self.Tensor([ Ws[l].mean() for l in range(len(Ws)) ])
-                stats = self.Tensor([ [Ws[l].mean(), Ws[l].std()] for l in range(len(Ws)) ])
-                new_batch.append(stats)
-            ## padd
-            batch_W_rep = torch.nn.utils.rnn.pad_sequence(new_batch, batch_first=self.batch_first, padding_value=self.padding_value)
-            ## compute mask
-            W_mask = (batch_W_rep != self.padding_value).to(self.device)
-            return batch_W_rep, W_lengths, W_mask
+            batch_init_params_mu_rep, init_params_mu_lengths, init_params_mu_mask = self.get_weight_stat(batch,'init_params_mu')
+            batch_final_params_mu_rep, final_params_mu_lengths, final_params_mu_mask = self.get_weight_stat(batch,'final_params_mu')
+            new_weights_stats_init = {'batch_init_params_mu_rep':batch_init_params_mu_rep,'init_params_mu_lengths':init_params_mu_lengths, 'init_params_mu_mask':init_params_mu_mask}
+            new_weights_stats_final = {'batch_final_params_mu_rep':batch_final_params_mu_rep,'final_params_mu_lengths':final_params_mu_lengths,'final_params_mu_mask':final_params_mu_mask}
+            weight_stats = dict(weight_stats, **new_weights_stats_init)
+            weight_stats = dict(weight_stats, **new_weights_stats_final)
+            ##
+            batch_init_params_std_rep, init_params_std_lengths, init_params_std_mask = self.get_weight_stat(batch,'init_params_std')
+            batch_final_params_std_rep, final_params_std_lengths, final_params_std_mask = self.get_weight_stat(batch,'final_params_std')
+            new_weights_stats_init = {'batch_init_params_std_rep':batch_init_params_std_rep,'init_params_std_lengths':init_params_std_lengths, 'init_params_std_mask':init_params_std_mask}
+            new_weights_stats_final = {'batch_final_params_std_rep':batch_final_params_std_rep,'final_params_std_lengths':final_params_std_lengths,'final_params_std_mask':final_params_std_mask}
+            weight_stats = dict(weight_stats, **new_weights_stats_init)
+            weight_stats = dict(weight_stats, **new_weights_stats_final)
+            ##
+            batch_init_params_l2_rep, init_params_l2_lengths, init_params_l2_mask = self.get_weight_stat(batch,'init_params_l2')
+            batch_final_params_l2_rep, final_params_l2_lengths, final_params_l2_mask = self.get_weight_stat(batch,'final_params_l2')
+            new_weights_stats_init = {'batch_init_params_l2_rep':batch_init_params_l2_rep,'init_params_l2_lengths':init_params_l2_lengths, 'init_params_l2_mask':init_params_l2_mask}
+            new_weights_stats_final = {'batch_final_params_l2_rep':batch_final_params_l2_rep,'final_params_l2_lengths':final_params_l2_lengths,'final_params_l2_mask':final_params_l2_mask}
+            weight_stats = dict(weight_stats, **new_weights_stats_init)
+            weight_stats = dict(weight_stats, **new_weights_stats_final)
+            ##
+            return weight_stats
+
+    def get_weight_stat(self, batch, W_type):
+        ## get lengths of sequences for each sample in the batch
+        weight_lengths = self.Tensor([ len(sample[W_type]) for sample in batch ]).long()
+        ## padd
+        #st()
+        new_batch = []
+        for i,sample in enumerate(batch):
+            try:
+                print(f'i = {i}')
+                print(f'sample = {sample}')
+                tensor_sample = self.Tensor(sample[W_type])
+                print(f'tensor_sample = {tensor_sample}')
+                new_batch.append(tensor_sample)
+            except:
+                print(f'\n ---- ERROR: i = {i}')
+                print(f'sample = {sample}')
+                st()
+        ## padd batch sequences
+        batch_weight_rep = torch.nn.utils.rnn.pad_sequence(new_batch, batch_first=self.batch_first, padding_value=self.padding_value)
+        ## compute mask
+        weight_mask = (batch_weight_rep != self.padding_value)
+        ##
+        return batch_weight_rep.to(self.device), weight_lengths.to(self.device), weight_mask.to(self.device)
 
 def testing():
     pass

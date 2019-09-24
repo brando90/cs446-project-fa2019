@@ -1,6 +1,6 @@
 import unittest
 
-from pdb import set_trace as st
+from pathlib import Path
 
 import numpy as np
 
@@ -8,8 +8,13 @@ import torch
 
 from predicting_performance.data_processor import DataProcessor, Vocab
 from predicting_performance.data_processor import get_type, MetaLearningDataset
+from predicting_performance.data_processor import Collate_fn_onehot_general_features
 
 import utils.utils as utils
+
+from pdb import set_trace as st
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class TestStringMethods(unittest.TestCase):
 
@@ -50,7 +55,8 @@ class TestStringMethods(unittest.TestCase):
         '''
         tests that the whole pipeline to make a processable input data from X = [model, meta data]
         '''
-        data_processor = DataProcessor()
+        vocab = Vocab()
+        data_processor = DataProcessor(vocab)
         vocab_size = len(data_processor.vocab.architecture_vocab)
         hp_vocab_size = len(data_processor.vocab.hparms_vocab)
         ## model to test
@@ -82,18 +88,67 @@ class TestStringMethods(unittest.TestCase):
         #print(feature_matrix)
 
     def test_loop_through_data(self):
+        ## paths to automl data set
         data_path = '~/predicting_generalization/automl/data/automl_dataset_debug'
-        pred_test_dataset = MetaLearningDataset(data_path)
+        path = Path(data_path).expanduser()
+        ## create dataloader for meta learning data set
+        vocab = Vocab()
+        pred_test_dataset = MetaLearningDataset(data_path, vocab)
         dataloader = torch.utils.data.DataLoader(pred_test_dataset, batch_size=1)
         ## check dataset is of the right size
         self.assertEqual(len(pred_test_dataset),5)
         ## loop through data
         print()
         for data in dataloader:
+            data
+            st()
             pass
             #print(f'len(data)={len(data)}')
             #self.assertEqual(len(data),8)
         self.assertEqual(True,True)
+
+    def test_loop_through_data(self):
+        ## paths to automl data set
+        data_path = '~/predicting_generalization/automl/data/automl_dataset_debug'
+        path = Path(data_path).expanduser()
+        ## create dataloader for meta learning data set
+        vocab = Vocab()
+        pred_test_dataset = MetaLearningDataset(data_path, vocab)
+        batch_first = True
+        collate_fn = Collate_fn_onehot_general_features(device, batch_first, vocab)
+        batch_size = 1
+        dataloader = torch.utils.data.DataLoader(pred_test_dataset, batch_size=batch_size, collate_fn=collate_fn)
+        ## check dataset is of the right size
+        self.assertEqual(len(pred_test_dataset),5)
+        ## loop through data
+        print()
+        for data in dataloader:
+            inputs,targets = data
+            batch_size_input = inputs['batch_train_error'].size(0)
+            batch_size_target = targets['batch_test_error'].size(0)
+            self.assertEqual(batch_size_input, batch_size_target)
+            self.assertEqual(batch_size_input, batch_size)
+            pass
+            #print(f'len(data)={len(data)}')
+            #self.assertEqual(len(data),8)
+        self.assertEqual(True,True)
+        ##
+        batch_size = 3
+        dataloader = torch.utils.data.DataLoader(pred_test_dataset, batch_size=batch_size, collate_fn=collate_fn)
+        ## check dataset is of the right size
+        self.assertEqual(len(pred_test_dataset),5)
+        ## loop through data
+        print()
+        for data in dataloader:
+            inputs,targets = data
+            batch_size_input = inputs['batch_train_error'].size(0)
+            batch_size_target = targets['batch_test_error'].size(0)
+            self.assertEqual(batch_size_input, batch_size_target)
+            pass
+            #print(f'len(data)={len(data)}')
+            #self.assertEqual(len(data),8)
+        self.assertEqual(True,True)
+
     #
     # def test_special_tokens(self):
     #     '''

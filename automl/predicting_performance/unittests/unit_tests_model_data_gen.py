@@ -7,7 +7,7 @@ from pathlib import Path
 from utils.utils import HelloWorld
 from utils.utils import make_and_check_dir
 
-from predicting_performance.model_data_gen import create_debug_data_set
+from predicting_performance.data_generators.debug_model_gen import create_debug_data_set
 from predicting_performance.data_point_models.debug_models import get_debug_models
 from predicting_performance.data_loader_cifar import get_cifar10_for_data_point_mdl_gen
 
