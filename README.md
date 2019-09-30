@@ -1,7 +1,9 @@
 # cs466-project-fa2019
 
-Gdrive with data set: https://drive.google.com/drive/u/3/folders/19obIXaG31RXJ7Ft3kRqh86K_ozypfnsQ
+Gdrive with original data set: https://drive.google.com/drive/u/3/folders/19obIXaG31RXJ7Ft3kRqh86K_ozypfnsQ
 slides: TODO
+
+The split data, generated using the notebook `automl/predicting_performance/data_splitting/Data Splitting.ipynb`, can be found [here](https://drive.google.com/drive/folders/1oAzWjqAlT7xDyldq8_7AxsHwj6NyhObc?usp=sharing). The folder includes `mapping.csv`, which maps models in the split dataset back to the orignal for reference.
 
 Set up
 -----
