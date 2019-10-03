@@ -15,7 +15,7 @@ from predicting_performance.stats_collector import StatsCollector
 
 from pdb import set_trace as st
 
-def get_init_hidden(batch_size, hidden_size, n_layers, bidirectional):
+def get_init_hidden(batch_size, hidden_size, n_layers, bidirectional, device):
     '''
     Gets initial hidden states for all cells depending on # batches, nb_layers, directions, etc.
 
@@ -32,8 +32,8 @@ def get_init_hidden(batch_size, hidden_size, n_layers, bidirectional):
     :return torch.Tensor hidden: initial hidden state (n_layers*nb_directions, batch_size, hidden_size)
     '''
     nb_directions = 2 if bidirectional else 1
-    h_n = torch.randn(n_layers*nb_directions, batch_size, hidden_size)
-    c_n = torch.randn(n_layers*nb_directions, batch_size, hidden_size)
+    h_n = torch.randn(n_layers*nb_directions, batch_size, hidden_size).to(device)
+    c_n = torch.randn(n_layers*nb_directions, batch_size, hidden_size).to(device)
     hidden = (h_n, c_n)
     return hidden
 
@@ -49,6 +49,9 @@ class ChainLSTM(nn.Module):
         '''
         '''
         super().__init__()
+        
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        
         ##
         self.batch_first = batch_first #If True, then the input and output tensors are provided as (batch, seq, feature).
         ## LSTM unit for processing the Architecture
@@ -78,6 +81,13 @@ class ChainLSTM(nn.Module):
                             batch_first=batch_first)
         self.predict_performance = nn.Linear(in_features=train_err_hidden_size,out_features=1)
         ##
+        
+        self.arch.to(self.device)
+        self.arch_hp.to(self.device)
+        self.opt.to(self.device)
+        self.weight_stats.to(self.device)
+        self.train_err.to(self.device)
+        self.predict_performance.to(self.device)
 
 
     def forward(self, input):
@@ -88,7 +98,9 @@ class ChainLSTM(nn.Module):
         batch_first = self.batch_first
         batch_size = input['batch_arch_rep'].size(0)
         ##
-        h_a, c_a = get_init_hidden(batch_size, self.arch.hidden_size, self.arch.num_layers, self.arch.bidirectional)
+        h_a, c_a = get_init_hidden(batch_size, self.arch.hidden_size, self.arch.num_layers, self.arch.bidirectional, self.device)
+        h_a.to(self.device)
+        c_a.to(self.device)
         ## forward pass through Arch
         arch_lengths = input['arch_lengths']
         batch_arch_rep = input['batch_arch_rep'] # (batch_size,max_seq_len,dim) e.g. torch.Size([3, 6, 12])
