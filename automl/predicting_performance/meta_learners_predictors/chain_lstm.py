@@ -99,8 +99,6 @@ class ChainLSTM(nn.Module):
         batch_size = input['batch_arch_rep'].size(0)
         ##
         h_a, c_a = get_init_hidden(batch_size, self.arch.hidden_size, self.arch.num_layers, self.arch.bidirectional, self.device)
-        h_a.to(self.device)
-        c_a.to(self.device)
         ## forward pass through Arch
         arch_lengths = input['arch_lengths']
         batch_arch_rep = input['batch_arch_rep'] # (batch_size,max_seq_len,dim) e.g. torch.Size([3, 6, 12])
@@ -196,7 +194,7 @@ def main():
     trainloader, valloader, testloader = dataloader, dataloader, dataloader # TODO this is just for the sake of an example!
     optimizer = torch.optim.Adam(meta_learner.parameters())
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[], gamma=1.0)
-    criterion = torch.nn.MSELoss()
+    criterion = torch.nn.MSELoss().to(device)
     error_criterion = criterion # TODO: implement epsilon classification loss
     stats_collector = StatsCollector()
     device = device
