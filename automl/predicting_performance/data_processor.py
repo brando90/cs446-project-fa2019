@@ -28,7 +28,7 @@ class Vocab:
         '''
         Initializes the architecture vocabulary
         '''
-        architecture_vocab = ['PAD_TOKEN', 'SOS', 'EOS','Conv2d', 'Linear', 'MaxPool2d', 'BatchNorm2d', 'Dropout2d', 'ReLU', 'SELU', 'LeakyReLU', 'Flatten']
+        architecture_vocab = ['PAD_TOKEN', 'SOS', 'EOS','Conv2d', 'Linear', 'MaxPool2d', 'BatchNorm2d', 'Dropout2d', 'ReLU', 'SELU', 'LeakyReLU', 'Flatten', 'Tanh', 'Dropout', 'BatchNorm1d', "Softmax"]
         architecture2idx = { architecture_vocab[i]:i for i in range(len(architecture_vocab)) } # faster than using python's list.index(element)
         return architecture_vocab, architecture2idx
 
