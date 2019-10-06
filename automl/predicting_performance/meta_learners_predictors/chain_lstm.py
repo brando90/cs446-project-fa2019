@@ -181,6 +181,7 @@ def main():
         weight_stats_input_size=weight_stats_input_size, weight_stats_hidden_size=weight_stats_hidden_size, weight_stats_layers=weight_stats_layers,
         opt_input_size=opt_input_size, opt_hidden_size=opt_hidden_size, opt_num_layers=opt_num_layers,
         train_err_input_size = train_err_input_size, train_err_hidden_size = train_err_hidden_size, num_layers_num_layers = num_layers_num_layers,
+        device=device
     )
     ##
     trainloader, valloader, testloader = dataloader, dataloader, dataloader # TODO this is just for the sake of an example!
