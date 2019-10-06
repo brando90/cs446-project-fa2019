@@ -45,49 +45,41 @@ class ChainLSTM(nn.Module):
     opt_input_size, opt_hidden_size, opt_num_layers,
     weight_stats_input_size, weight_stats_hidden_size, weight_stats_layers,
     train_err_input_size, train_err_hidden_size, num_layers_num_layers,
-    bidirectional=False, batch_first=True):
+    bidirectional=False, batch_first=True, device="cpu"):
         '''
         '''
         super().__init__()
         
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        
+        self.device = device
         ##
         self.batch_first = batch_first #If True, then the input and output tensors are provided as (batch, seq, feature).
         ## LSTM unit for processing the Architecture
         self.arch = nn.LSTM(input_size=arch_input_size,
                             hidden_size=arch_hidden_size,
                             num_layers=arch_num_layers,
-                            batch_first=batch_first)
+                            batch_first=batch_first).to(device)
         ## LSTM unit for processing the Architecture HyperParams
         self.arch_hp = nn.LSTM(input_size=arch_hp_input_size,
                             hidden_size=arch_hp_hidden_size,
                             num_layers=arch_num_layers,
-                            batch_first=batch_first)
+                            batch_first=batch_first).to(device)
         ## LSTM for processing raw features related to Optimization
         self.opt = nn.LSTM(input_size=opt_input_size,
                             hidden_size=opt_hidden_size,
                             num_layers=opt_num_layers,
-                            batch_first=batch_first)
+                            batch_first=batch_first).to(device)
         # ## LSTM for processing raw features related to init and final weights
         self.weight_stats = nn.LSTM(input_size=weight_stats_input_size,
                             hidden_size=weight_stats_hidden_size,
                             num_layers=weight_stats_layers,
-                            batch_first=batch_first)
+                            batch_first=batch_first).to(device)
         # ## LSTM for processing train error
         self.train_err = nn.LSTM(input_size=train_err_input_size,
                             hidden_size=train_err_hidden_size,
                             num_layers=num_layers_num_layers,
-                            batch_first=batch_first)
-        self.predict_performance = nn.Linear(in_features=train_err_hidden_size,out_features=1)
+                            batch_first=batch_first).to(device)
+        self.predict_performance = nn.Linear(in_features=train_err_hidden_size,out_features=1).to(device)
         ##
-        
-        self.arch.to(self.device)
-        self.arch_hp.to(self.device)
-        self.opt.to(self.device)
-        self.weight_stats.to(self.device)
-        self.train_err.to(self.device)
-        self.predict_performance.to(self.device)
 
 
     def forward(self, input):
@@ -194,7 +186,7 @@ def main():
     trainloader, valloader, testloader = dataloader, dataloader, dataloader # TODO this is just for the sake of an example!
     optimizer = torch.optim.Adam(meta_learner.parameters())
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[], gamma=1.0)
-    criterion = torch.nn.MSELoss().to(device)
+    criterion = torch.nn.MSELoss()
     error_criterion = criterion # TODO: implement epsilon classification loss
     stats_collector = StatsCollector()
     device = device
