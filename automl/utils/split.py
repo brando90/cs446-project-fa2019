@@ -9,8 +9,9 @@ import yaml
 from tqdm import tqdm_notebook as tqdm
 
 # Hyperparams
-data_dir_str = '../../data'
-data_path_str = 'original_data_set'
+# data_dir_str = '../../data'
+data_dir_str = '/Users/pangda/predicting_generalization/alldata'
+data_path_str = 'Grp13_conv_random'
 new_path_str = 'split_set'
 splits = [
     ('train', .8),
