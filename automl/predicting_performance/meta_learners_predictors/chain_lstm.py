@@ -5,15 +5,21 @@ import torch.nn as nn
 from torch.nn.functional import sigmoid as sigmoid
 
 from pathlib import Path
+import sys
 
-from predicting_performance.data_processor import DataProcessor, Vocab
+sys.path.append('/home/xiaot6/cs446-project-fa2019/automl/')
+from predicting_performance.data_processor import DataProcessor
+from predicting_performance.data_processor import Vocab
 from predicting_performance.data_processor import get_type, MetaLearningDataset
 from predicting_performance.data_processor import Collate_fn_onehot_general_features
 from predicting_performance.trainer import Trainer
+from predicting_performance.data_generators.debug_model_gen import save_model_info_lstm
+
 
 from predicting_performance.stats_collector import StatsCollector
 
 from pdb import set_trace as st
+from math import inf
 
 def get_init_hidden(batch_size, hidden_size, n_layers, bidirectional, device):
     '''
@@ -49,7 +55,7 @@ class ChainLSTM(nn.Module):
         '''
         '''
         super().__init__()
-        
+
         self.device = device
         ##
         self.batch_first = batch_first #If True, then the input and output tensors are provided as (batch, seq, feature).
@@ -73,6 +79,7 @@ class ChainLSTM(nn.Module):
                             hidden_size=weight_stats_hidden_size,
                             num_layers=weight_stats_layers,
                             batch_first=batch_first).to(device)
+
         # ## LSTM for processing train error
         self.train_err = nn.LSTM(input_size=train_err_input_size,
                             hidden_size=train_err_hidden_size,
@@ -96,7 +103,7 @@ class ChainLSTM(nn.Module):
         batch_arch_rep = input['batch_arch_rep'] # (batch_size,max_seq_len,dim) e.g. torch.Size([3, 6, 12])
         # print()
         # print(f'arch_lengths = {arch_lengths}')
-        print(f'batch_arch_rep.size() = {batch_arch_rep.size()}')
+        # print(f'batch_arch_rep.size() = {batch_arch_rep.size()}')
         batch_arch_rep = nn.utils.rnn.pack_padded_sequence(batch_arch_rep, arch_lengths, batch_first=batch_first, enforce_sorted=False)
         out, (h_a, c_a) = self.arch(input=batch_arch_rep, hx=(h_a, c_a)) # lstm
         ## forward pass through Arch
@@ -108,7 +115,7 @@ class ChainLSTM(nn.Module):
         train_history = input['train_history']
         val_history = input['val_history']
         history = torch.cat((train_history,val_history),dim=1)
-        out, (h_a, c_a) = self.opt(input=history, hx=(h_a, c_a)) # lstm
+        out, (h_a, c_a) = self.opt(input=history.transpose(1,2), hx=(h_a, c_a))# lstm
         ## forward pass through Weight stats
         batch_init_params_mu_rep, init_params_mu_lengths = input['batch_init_params_mu_rep'], input['init_params_mu_lengths']
         batch_init_params_std_rep, _ = input['batch_init_params_std_rep'], input['init_params_std_lengths']
@@ -137,17 +144,27 @@ def main():
     USE_CUDA = torch.cuda.is_available()
     device = torch.device("cuda" if USE_CUDA else "cpu")
     ## paths to automl data set
-    data_path = '~/predicting_generalization/automl/data/automl_dataset_debug'
-    path = Path(data_path).expanduser()
+    # data_path = '~/predicting_generalization/automl/data/automl_dataset_debug'
+    data_path_save = '/home/xiaot6/cs446-project-fa2019/automl/data/set1' #where you store results
+    data_path_test = '/home/xiaot6/split_set/test'
+    data_path_train = '/home/xiaot6/split_set/train'
+    data_path_val = '/home/xiaot6/split_set/val'
+    path = Path(data_path_save).expanduser()
     ## Vocab
     vocab = Vocab()
     V_a, V_hp = len(vocab.architecture_vocab), len(vocab.hparms_vocab)
     ## create dataloader for meta learning data set
     batch_first = True
-    dataset = MetaLearningDataset(data_path, vocab)
+    # dataset = MetaLearningDataset(data_path, vocab)
+    dataset_test = MetaLearningDataset(data_path_test, vocab)
+    dataset_train = MetaLearningDataset(data_path_train, vocab)
+    dataset_val = MetaLearningDataset(data_path_val, vocab)
     collate_fn = Collate_fn_onehot_general_features(device, batch_first, vocab)
-    batch_size = 3
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
+    batch_size = 512
+    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
+    trainloader = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, collate_fn=collate_fn)
+    testloader = torch.utils.data.DataLoader(dataset_test, batch_size=batch_size, collate_fn=collate_fn)
+    valloader = torch.utils.data.DataLoader(dataset_val, batch_size=batch_size, collate_fn=collate_fn)
     ## instantiate Meta Learner
     # arch hps
     arch_input_size = V_a
@@ -162,7 +179,8 @@ def main():
     # input1 = dataset[0]['train_history'].view(batch_size,-1)
     # input2 = dataset[0]['val_history'].view(batch_size,-1)
     # st()
-    seq_len = len(dataset[0]['test_errors']) # since they all have the same seq_len
+    # seq_len = len(dataset[0]['test_errors']) # since they all have the same seq_len
+    seq_len = len(dataset_test[0]['test_errors']) # since they all have the same seq_len
     input_dim = 4 # 4 is cuz we have 2 losses, errors CSEloss but we have val and train so 2*2=4
     opt_input_size = input_dim # so that it process one time step of the history at a time [train_err,train_loss,val_loss,val_err]
     opt_hidden_size = arch_hidden_size
@@ -184,7 +202,7 @@ def main():
         device=device
     )
     ##
-    trainloader, valloader, testloader = dataloader, dataloader, dataloader # TODO this is just for the sake of an example!
+    # trainloader, valloader, testloader = dataloader, dataloader, dataloader # TODO this is just for the sake of an example!
     optimizer = torch.optim.Adam(meta_learner.parameters())
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[], gamma=1.0)
     criterion = torch.nn.MSELoss()
@@ -196,9 +214,18 @@ def main():
         stats_collector,
         device)
     ##
-    nb_epochs = 2
-    train_iterations = 4 # TODO: CHANGE for model to be fully trained!!!
-    trainer.train_and_track_stats(meta_learner, nb_epochs, iterations=4, train_iterations=4)
+    batch_size_train = trainloader.batch_size
+    batch_size_test = testloader.batch_size
+    batch_size_val = valloader.batch_size
+    nb_epochs = 500 #50
+    train_iterations = inf # TODO: CHANGE for model to be fully trained!!! # inf
+    trainer.train_and_track_stats(meta_learner, nb_epochs, iterations =4, train_iterations = train_iterations)
+    # save_model_info_lstm(data_path_save,
+    #     train_loss, train_error, val_loss, val_error, test_loss, test_error,
+    #     optimizer, epochs, criterion, error_criterion,
+    #     hours,batch_size_train, batch_size_val, batch_size_test,
+    #     scheduler, other_data)
+    print('done')
 
 if __name__ == '__main__':
     main()

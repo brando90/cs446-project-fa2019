@@ -28,7 +28,7 @@ class Vocab:
         '''
         Initializes the architecture vocabulary
         '''
-        architecture_vocab = ['PAD_TOKEN', 'SOS', 'EOS','Conv2d', 'Linear', 'MaxPool2d', 'BatchNorm2d', 'Dropout2d', 'ReLU', 'SELU', 'LeakyReLU', 'Flatten']
+        architecture_vocab = ['PAD_TOKEN', 'SOS', 'EOS','Conv2d', 'Linear', 'MaxPool2d', 'BatchNorm2d', 'Dropout2d', 'ReLU', 'SELU', 'LeakyReLU', 'Flatten','Tanh','Dropout','BatchNorm1d','Softmax']
         architecture2idx = { architecture_vocab[i]:i for i in range(len(architecture_vocab)) } # faster than using python's list.index(element)
         return architecture_vocab, architecture2idx
 
@@ -376,7 +376,7 @@ class MetaLearningDataset(Dataset):
         ## generate strings to paths
         data_path = str(self.path)
         data_filepath = os.path.join(data_path, mdl_name)
-        #
+        print("data_filepath",data_filepath)
         metadata_filepath = os.path.join(data_filepath, f'meta_data.yml')
         otherdata_filepath = os.path.join(data_filepath, f'other_data.yml')
         param_stats_filepath = os.path.join(data_filepath, f'param_stats.yml')
@@ -393,9 +393,12 @@ class MetaLearningDataset(Dataset):
             opt_str = data_item['opt_str']
             data_item['epochs'] = yamldata['epochs']
             epochs = data_item['epochs']
-            data_item['batch_size_train'] = yamldata['batch_size_train']
-            data_item['batch_size_test'] = yamldata['batch_size_test']
-            data_item['batch_size_val'] = yamldata['batch_size_val']
+            # data_item['batch_size_test'] = yamldata['batch_size_test']
+            # data_item['batch_size_train'] = yamldata['batch_size_train']
+            # data_item['batch_size_val'] = yamldata['batch_size_val']
+            data_item['batch_size_test'] = 1024
+            data_item['batch_size_train'] = 512
+            data_item['batch_size_val'] = 512
             try:
                 criterion = yamldata['criteron']
             except:
@@ -623,18 +626,25 @@ class Collate_fn_onehot_general_features(object):
         for sample in batch:
             ##
             train_errors, train_losses = Tensor(sample['train_errors']), Tensor(sample['train_losses'])
-            train = torch.stack((train_errors,train_losses)) # (2,seq_len)
+            train = torch.stack((train_errors,train_losses)).t() # (2,seq_len)
             #train = train.unsqueeze(2) # so that convolution layers can take it (2,seq_len,1)
             train_history_batch.append(train)
             ##
             val_errors, val_losses = Tensor(sample['val_errors']), Tensor(sample['val_losses'])
-            val = torch.stack((val_errors,val_losses)) # (2,seq_len)
+            val = torch.stack((val_errors,val_losses)).t() # (2,seq_len)
             #val = val.unsqueeze(2) # so that convolution layers can take it (2,seq_len,1)
             val_history_batch.append(val)
+
         ##
         train_history_batch = torch.nn.utils.rnn.pad_sequence(train_history_batch, batch_first=self.batch_first, padding_value=self.padding_value)
         val_history_batch = torch.nn.utils.rnn.pad_sequence(val_history_batch, batch_first=self.batch_first, padding_value=self.padding_value)
         print(f'val_history_batch = {val_history_batch.size()}')
+        if self.batch_first:
+            train_history_batch = train_history_batch.transpose(1,2)
+            val_history_batch = val_history_batch.transpose(1,2)
+        else:
+            train_history_batch = train_history_batch.transpose(0,2)
+            val_history_batch = val_history_batch.transpose(0,2)
         return train_history_batch.to(self.device), val_history_batch.to(self.device)
 
     def get_all_weight_stats(self, batch):
