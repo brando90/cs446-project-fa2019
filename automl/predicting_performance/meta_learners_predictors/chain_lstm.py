@@ -14,12 +14,14 @@ from predicting_performance.data_processor import get_type, MetaLearningDataset
 from predicting_performance.data_processor import Collate_fn_onehot_general_features
 from predicting_performance.trainer import Trainer
 from predicting_performance.data_generators.debug_model_gen import save_model_info_lstm
+import predicting_performance.metrics as metrics
 
 
 from predicting_performance.stats_collector import StatsCollector
 
 from pdb import set_trace as st
 from math import inf
+from utils.utils import make_and_check_dir, timeSince, report_times
 
 def get_init_hidden(batch_size, hidden_size, n_layers, bidirectional, device):
     '''
@@ -206,7 +208,8 @@ def main():
     optimizer = torch.optim.Adam(meta_learner.parameters())
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[], gamma=1.0)
     criterion = torch.nn.MSELoss()
-    error_criterion = criterion # TODO: implement epsilon classification loss
+    # error_criterion = criterion # TODO: implement epsilon classification loss
+    error_criterion = metrics.error_criterion
     stats_collector = StatsCollector()
     device = device
     trainer = Trainer(trainloader, valloader, testloader,
@@ -217,14 +220,14 @@ def main():
     batch_size_train = trainloader.batch_size
     batch_size_test = testloader.batch_size
     batch_size_val = valloader.batch_size
-    nb_epochs = 500 #50
+    nb_epochs = 3#500 #50
     train_iterations = inf # TODO: CHANGE for model to be fully trained!!! # inf
-    trainer.train_and_track_stats(meta_learner, nb_epochs, iterations =4, train_iterations = train_iterations)
-    # save_model_info_lstm(data_path_save,
-    #     train_loss, train_error, val_loss, val_error, test_loss, test_error,
-    #     optimizer, epochs, criterion, error_criterion,
-    #     hours,batch_size_train, batch_size_val, batch_size_test,
-    #     scheduler, other_data)
+    train_loss, train_error, val_loss, val_error, test_loss, test_error = trainer.train_and_track_stats(meta_learner, nb_epochs, iterations =4, train_iterations = train_iterations)
+    other_data = trainer.stats_collector.get_stats_dict({'error_criterion':error_criterion.__name__})
+    # other_data = trainer.stats_collector.get_stats_dict({'error_criterion':error_criterion})
+    save_model_info_lstm(data_path_save,
+        train_loss, train_error, val_loss, val_error, test_loss, test_error,nb_epochs,optimizer,
+        batch_size_train, batch_size_val, batch_size_test,scheduler,other_data)
     print('done')
 
 if __name__ == '__main__':

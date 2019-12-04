@@ -159,45 +159,29 @@ def save_model_info(data_path, mdl, init_params, final_params,
         yaml.dump(yaml.load(f'final_params_l2: {final_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
     #np.savez(meta_data_path, init_params=init_params, final_params=final_params, train_loss=train_loss, train_error=train_error, test_loss=test_loss, test_error=test_error)
 
-def save_model_info_lstm(data_path, mdl, init_params, final_params,
-    train_loss, train_error, val_loss, val_error, test_loss, test_error,
-    optimizer, epochs, criterion, error_criterion,
-    hours, mdl_name, init_algorithm_list, init_hyerparam_list,
-    batch_size_train, batch_size_val, batch_size_test,
-    number_parameters,
-    scheduler=None, other_data=None):
+def save_model_info_lstm(data_path,
+    train_loss, train_error, val_loss, val_error, test_loss, test_error,epochs,optimizer,
+    hours,batch_size_train, batch_size_val, batch_size_test,scheduler=None,other_data = None):
     """
-    Saves model info to yaml and numpy files to be used later.
-    Tips:
-        - you can save loss = error if criterion = error_criterion.
-        - if you have no val set set val_loss and val_error = -1
-    :param str data_path: path to the main dolfer of the data set e.g. '../main_full_auto_ml/data/automl_dataset_debug/'
-    :param torch.nn.Sequential mdl: model generated from model data generator
-    :param torch.tensor init_params: initial weights for the model
-    :param torch.tensor final_params: final weights for the model
-    :param float train_error: training error for the model
-    :param float test_error: test error for the model
-    :param torch.optim optimizer: optimizer used in the model
-    :param int epochs: number of epochs the model was trained for
-    :param torch.nn loss: the loss function used in the model
-    :param str mdl_name: name of the model to save
-    TODO: change so that the path to where things should be save is part of the class data-gen rather than here
+    save_model_info(data_path, mdl, init_params, final_params,
+        train_loss, train_error, val_loss, val_error, test_loss, test_error,
+        optimizer, epochs, criterion, error_criterion,
+        hours, mdl_name, init_algorithm_list, init_hyerparam_list,
+        batch_size_train, batch_size_val, batch_size_test,
+        number_parameters,
+        scheduler=None, other_data=None):
     """
     if scheduler is None:
         milestones, scheduler_gamma, last_epoch = [], 1.0, -1
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=scheduler_gamma, last_epoch=last_epoch)
     milestones, scheduler_gamma, last_epoch = list(scheduler.milestones), scheduler.gamma, scheduler.last_epoch
     print(f'milestones, scheduler_gamma, last_epoch = {milestones, scheduler_gamma, last_epoch}')
-    ##format mdl, loss function and optimizer to be put into the metadata file
-
 
     scheduler = f'scheduler: {str(scheduler)}'
     milestones = f'milestones: {str(milestones)}'
     scheduler_gamma = f'scheduler_gamma: {str(scheduler_gamma)}'
     last_epoch = f'last_epoch: {str(last_epoch)}'
     epochs = f"epochs: {epochs}"
-    criteron = f"criterion: '{str(criterion)}'"
-    error_criterion = f"error_criterion: {error_criterion}"
     train_loss = f'train_loss: {str(float(train_loss))}'
     train_error = f'train_error: {str(float(train_error))}'
     val_loss = f'val_loss: {str(float(val_loss))}'
@@ -211,7 +195,7 @@ def save_model_info_lstm(data_path, mdl, init_params, final_params,
     process = subprocess.Popen(['git', 'rev-parse', 'HEAD'], shell=False, stdout=subprocess.PIPE)
     git_head_hash = process.communicate()[0].strip()
     git_head_hash = f'git_head_hash: {git_head_hash}'
-    folder_path = os.path.join(data_path, mdl_path)
+    folder_path = os.path.join(data_path)
     #meta_data_path = os.path.join(folder_path,f'meta_data_{mdl_name}.yml')
     meta_data_path = os.path.join(folder_path,f'meta_data.yml')
     print(f'meta_data_path = {meta_data_path}')
@@ -220,15 +204,15 @@ def save_model_info_lstm(data_path, mdl, init_params, final_params,
     default_flow_style = False
     with open(meta_data_path, "w") as conffile:
         #writes meta_data info to the yaml file
-        yaml.dump(yaml.load(meta_data, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(optimizer, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(scheduler, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(milestones, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(scheduler_gamma, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(last_epoch, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        print(f'---> milestones, scheduler_gamma, last_epoch = {milestones, scheduler_gamma, last_epoch}')
+        # yaml.dump(yaml.load(meta_data, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(optimizer, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(scheduler, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(milestones, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(scheduler_gamma, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(last_epoch, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # print(f'---> milestones, scheduler_gamma, last_epoch = {milestones, scheduler_gamma, last_epoch}')
         yaml.dump(yaml.load(epochs, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(criteron, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(criteron, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(train_loss, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(train_error, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(val_loss, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
@@ -236,46 +220,24 @@ def save_model_info_lstm(data_path, mdl, init_params, final_params,
         yaml.dump(yaml.load(test_loss, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(test_error, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
 
-        minutes = hours*60.0
-        days = hours/24.0
-        seconds = f'seconds: {seconds}'
-        minutes = f'minutes: {minutes}'
-        hours = f'hours: {hours}'
-        days = f'days: {days}'
-        yaml.dump(yaml.load(str(seconds), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(str(minutes), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(str(hours), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(str(days), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # minutes = hours*60.0
+        # days = hours/24.0
+        # seconds = f'seconds: {seconds}'
+        # minutes = f'minutes: {minutes}'
+        # hours = f'hours: {hours}'
+        # days = f'days: {days}'
+        # yaml.dump(yaml.load(str(seconds), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(str(minutes), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(str(hours), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        # yaml.dump(yaml.load(str(days), Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(batch_size_train, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(batch_size_test, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(batch_size_val, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
         yaml.dump(yaml.load(git_head_hash, Loader=Loader), conffile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-    ##
-    #other_data_path = os.path.join(folder_path,f'other_data_{mdl_name}.yml')
     other_data_path = os.path.join(folder_path,f'other_data.yml')
     if other_data is not None:
         with open(other_data_path, "w") as otherfile:
             yaml.dump(other_data, otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-    #writes tensors to numpy file.
-    #meta_data_path = os.path.join(folder_path,f'tensors_{mdl_name}')
-    param_stats_data_path = os.path.join(folder_path,f'param_stats.yml')
-    # save in numpy array format (if not done this it willl save if as pytorch)
-    ## init_params = [ param.data.cpu().numpy() for param in init_params]
-    ## final_params = [ param.data.cpu().numpy() for param in final_params]
-    init_params_mu = [ param.data.mean().item() for param in init_params]
-    final_params_mu = [ param.data.mean().item() for param in final_params]
-    init_params_std = [ param.data.std().item() for param in init_params]
-    final_params_std = [ param.data.std().item() for param in final_params]
-    init_params_l2 = [ param.data.norm(2).item() for param in init_params]
-    final_params_l2 = [ param.data.norm(2).item() for param in final_params]
-    with open(param_stats_data_path, "w") as otherfile:
-        yaml.dump(yaml.load(f'init_params_mu: {init_params_mu}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(f'final_params_mu: {final_params_mu}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(f'init_params_std: {init_params_std}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(f'final_params_std: {final_params_std}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(f'init_params_l2: {init_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-        yaml.dump(yaml.load(f'final_params_l2: {final_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
-    #np.savez(meta_data_path, init_params=init_params, final_params=final_params, train_loss=train_loss, train_error=train_error, test_loss=test_loss, test_error=test_error)
 
 class ModelDataGenerator():
 
