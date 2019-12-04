@@ -159,7 +159,7 @@ def save_model_info(data_path, mdl, init_params, final_params,
         yaml.dump(yaml.load(f'final_params_l2: {final_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
     #np.savez(meta_data_path, init_params=init_params, final_params=final_params, train_loss=train_loss, train_error=train_error, test_loss=test_loss, test_error=test_error)
 
-def save_model_info_lstm(data_path,
+def save_model_info_lstm(data_path,data_path_save,init_params, final_params,
     train_loss, train_error, val_loss, val_error, test_loss, test_error,epochs,optimizer,
     hours,batch_size_train, batch_size_val, batch_size_test,scheduler=None,other_data = None):
     """
@@ -238,6 +238,25 @@ def save_model_info_lstm(data_path,
     if other_data is not None:
         with open(other_data_path, "w") as otherfile:
             yaml.dump(other_data, otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+    param_stats_data_path = os.path.join(folder_path,f'param_stats.yml')
+    # save in numpy array format (if not done this it willl save if as pytorch)
+    ## init_params = [ param.data.cpu().numpy() for param in init_params]
+    ## final_params = [ param.data.cpu().numpy() for param in final_params]
+    init_params_mu = [ param.data.mean().item() for param in init_params]
+    final_params_mu = [ param.data.mean().item() for param in final_params]
+    init_params_std = [ param.data.std().item() for param in init_params]
+    final_params_std = [ param.data.std().item() for param in final_params]
+    init_params_l2 = [ param.data.norm(2).item() for param in init_params]
+    final_params_l2 = [ param.data.norm(2).item() for param in final_params]
+    with open(param_stats_data_path, "w") as otherfile:
+        yaml.dump(yaml.load(f'init_params_mu: {init_params_mu}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        yaml.dump(yaml.load(f'final_params_mu: {final_params_mu}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        yaml.dump(yaml.load(f'init_params_std: {init_params_std}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        yaml.dump(yaml.load(f'final_params_std: {final_params_std}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        yaml.dump(yaml.load(f'init_params_l2: {init_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+        yaml.dump(yaml.load(f'final_params_l2: {final_params_l2}', Loader=Loader), otherfile, explicit_start=explicit_start, default_flow_style=default_flow_style)
+    #np.savez(meta_data_path, init_params=init_params, final_params=final_params, train_loss=train_loss, train_error=train_error, test_loss=test_loss, test_error=test_error)
+
 
 class ModelDataGenerator():
 

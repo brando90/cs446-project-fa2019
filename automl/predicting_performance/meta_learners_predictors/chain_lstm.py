@@ -209,6 +209,7 @@ def main():
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[], gamma=1.0)
     criterion = torch.nn.MSELoss()
     # error_criterion = criterion # TODO: implement epsilon classification loss
+    init_params = list(meta_learner.parameters())
     error_criterion = metrics.error_criterion
     stats_collector = StatsCollector()
     device = device
@@ -217,6 +218,7 @@ def main():
         stats_collector,
         device)
     ##
+    final_params = list(meta_learner.parameters())
     batch_size_train = trainloader.batch_size
     batch_size_test = testloader.batch_size
     batch_size_val = valloader.batch_size
